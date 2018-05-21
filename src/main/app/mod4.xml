@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="mod4Flow">
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+
+%var flattenR = (a) -> 
+
+ flatten (a map ($ unless $ is :array otherwise flattenR($)) )
+ 
+
+---
+
+flattenR( [ 1, 2, [3, [4, [5]]]])
+	
+	
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="mod4Flo-WT42">
+        <dw:transform-message doc:name="Copy_of_Copy_of_Transform Message" metadata:id="de56f86b-2765-420a-8c41-617a953819ca">
+            <dw:input-payload doc:sample="flights-example.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+%var airportInfo = readUrl(
+  "classpath://airportInfoTiny.json", "application/json"
+) distinctBy $ groupBy $.IATA
+%var rmFields = (o,fs) -> 
+	o mapObject ({($$): $} unless fs contains $$ as :string otherwise {})
+	
+%var shuffleObject = (o, sis) ->
+	using (
+		fs = o pluck $$
+	) (
+		{(sis map {
+			(fs[$]): o[$]
+		})}
+	)
+%var recurse = (ds) -> ds match {
+	:array -> $ map (e) -> recurse(e),
+	:object -> $ mapObject ((v,k) -> {(upper k): recurse(v)}),
+	default -> ds
+}
+---
+using ( data = 
+	payload map {
+		($),
+		airport: rmFields(airportInfo[$.destination][0], 
+			["openFlightsAirportId","type","source"])
+	} map shuffleObject($, [9..0])
+) (
+	data
+)
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>

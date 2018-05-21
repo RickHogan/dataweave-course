@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="mod3Flow">
+        <dw:transform-message doc:name="Transform Message" metadata:id="de56f86b-2765-420a-8c41-617a953819ca">
+            <dw:input-payload doc:sample="flights-example.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+%var airportInfo = readUrl(
+  "classpath://airportInfoTiny.json", "application/json"
+)
+
+%var genFilter = (a, f, v) -> a filter $[f] == v
+%var genFilterFn = (a, fn) -> a filter fn($)
+
+%var curriedFilterFactory = (a) -> (fn) -> a filter fn($)
+%var filterAirportInfo = curriedFilterFactory(airportInfo)
+
+---
+//airportInfo filter (e) -> e.IATA == "SFO"
+payload map {
+	($),
+	airport: filterAirportInfo((e) -> e.IATA == $.destination)[0]
+}
+
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="Copy_of_mod3Flow">
+        <dw:transform-message doc:name="Copy_of_Transform Message" metadata:id="de56f86b-2765-420a-8c41-617a953819ca">
+            <dw:input-payload doc:sample="flights-example.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+%var airportInfo = readUrl(
+  "classpath://airportInfoTiny.json", "application/json"
+) distinctBy $ groupBy $.IATA
+
+%var rmFields = (o,fs) -> 
+o mapObject ({($$): $} unless fs contains $$ as :string otherwise {})
+
+%var shuffleObject = (o, sis) -> 
+	using (
+		fs = o pluck $$
+		) (
+			sis map {
+				(fs[$]): o[$]
+			}
+			
+	)
+---
+//payload map {
+//	($),
+//	airport: rmFields(airportInfo[$.destination][0],["source", "timeZone","type"]) 
+//}
+
+[payload, shuffleObject(payload, [8..0])]
+
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="mod3Flow-helper">
+        <dw:transform-message doc:name="Transform Message" metadata:id="c6f3c4a3-ef9b-4dcb-b4bf-9f21bafe0f78">
+            <dw:input-payload doc:sample="flight-example.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+
+%var rmFields = (o,fs) -> 
+o mapObject ({($$): $} unless fs contains $$ as :string otherwise {})
+
+
+
+---
+
+//payload mapObject {($): typeOf $}
+
+rmFields(payload,["flightCode", "emptySeats", "totalSeats", "price"])
+
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>

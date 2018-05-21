@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="mod1Flow-helper">
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+---
+"Hello" match {
+	:object -> typeOf $,
+	:array -> "Array with size: $(sizeOf $)",
+	:number -> $,
+	:string -> "String with size: $(sizeOf $)",
+	"Hello" -> "$($) World",
+	default -> $
+}]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="mod1Flow-WT11">
+        <dw:transform-message doc:name="Transform Message" metadata:id="6c71d242-8b4f-4807-a651-33b0ebbc820f">
+            <dw:input-payload doc:sample="flight-example.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw
+---
+typeOf [0..100] as :array
+
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="mod1Flow">
+        <dw:transform-message doc:name="Transform Message" metadata:id="1f045cf3-3f8c-457a-90fb-646cafb00d5e">
+            <dw:input-payload doc:sample="findFlight.xml" mimeType="application/xml"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/dw	
+%namespace ns0 http://soap.training.mulesoft.com/
+
+%var myLib = readUrl("classpath://myFirstLib.dwl","application/dw")
+
+%var calcTotalSeats = (pType) -> 
+using (
+	ptNum = pType[-3..-1] as :number
+) (
+	ptNum match {
+		707 -> 100,
+		727 -> 150,
+		737 -> 200,
+		747 -> 300,
+		pt when pt == 757 or pt == 777 -> 225,
+		default -> "NA"
+	}
+)
+
+%var exchangeRates = myLib.xe
+
+%var defaultCurrency = "CAD"
+
+---
+payload.ns0#findFlightResponse.*return map ((e,i) ->{
+	(e - "planeType" - "price"),
+	
+	planeType: e.planeType replace /Boing/ with "Boeing",
+	totalSeats: calcTotalSeats(e.planeType),
+	price: e.price * exchangeRates[defaultCurrency]
+})
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>
